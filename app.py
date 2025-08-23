@@ -2970,8 +2970,14 @@ async def build_and_run_graph(payload: dict = Body(...)):
             summarizer_llm = CoderMockLLM()
             # For debug modes, default to Ollama embeddings unless OpenAI is specifically requested
             provider = params.get("llm_provider", "ollama")
-            if provider == "openai" and params.get("openai_api_key"):
-                embeddings_model = OpenAIEmbeddings(api_key=params.get("openai_api_key"))
+            if provider == "openai" and (params.get("openai_api_key") or params.get("openai_base_url")):
+                # Prepare embeddings kwargs for OpenAI
+                embeddings_kwargs = {}
+                if params.get("openai_api_key"):
+                    embeddings_kwargs["api_key"] = params.get("openai_api_key")
+                if params.get("openai_base_url"):
+                    embeddings_kwargs["base_url"] = params.get("openai_base_url")
+                embeddings_model = OpenAIEmbeddings(**embeddings_kwargs)
             else:
                 embeddings_model = OllamaEmbeddings(model="mxbai-embed-large:latest")
         elif params.get("debug_mode") == 'true':
@@ -2980,8 +2986,14 @@ async def build_and_run_graph(payload: dict = Body(...)):
             summarizer_llm = MockLLM()
             # For debug modes, default to Ollama embeddings unless OpenAI is specifically requested
             provider = params.get("llm_provider", "ollama")
-            if provider == "openai" and params.get("openai_api_key"):
-                embeddings_model = OpenAIEmbeddings(api_key=params.get("openai_api_key"))
+            if provider == "openai" and (params.get("openai_api_key") or params.get("openai_base_url")):
+                # Prepare embeddings kwargs for OpenAI
+                embeddings_kwargs = {}
+                if params.get("openai_api_key"):
+                    embeddings_kwargs["api_key"] = params.get("openai_api_key")
+                if params.get("openai_base_url"):
+                    embeddings_kwargs["base_url"] = params.get("openai_base_url")
+                embeddings_model = OpenAIEmbeddings(**embeddings_kwargs)
             else:
                 embeddings_model = OllamaEmbeddings(model="mxbai-embed-large:latest")
         else:
@@ -2991,20 +3003,47 @@ async def build_and_run_graph(payload: dict = Body(...)):
             if provider == "openai":
                 # OpenAI configuration
                 api_key = params.get("openai_api_key")
-                if not api_key:
-                    raise ValueError("OpenAI API key is required when using OpenAI provider")
+                base_url = params.get("openai_base_url", "").strip()
+                
+                # For local providers, API key might not be required
+                if not api_key and not base_url:
+                    raise ValueError("OpenAI API key is required when using OpenAI provider without a custom base URL")
                 
                 main_model = params.get("openai_model", "gpt-4o-mini")
                 summarizer_model = params.get("openai_summarizer_model", "gpt-4o-mini")
                 
-                await log_stream.put(f"--- Initializing Main Agent LLM: OpenAI ({main_model}) ---")
-                llm = ChatOpenAI(model=main_model, temperature=0, api_key=api_key)
-                summarizer_llm = ChatOpenAI(model=summarizer_model, temperature=0, api_key=api_key)
-                embeddings_model = OpenAIEmbeddings(api_key=api_key)
+                # Prepare kwargs for OpenAI clients
+                openai_kwargs = {
+                    "model": main_model,
+                    "temperature": 0
+                }
+                summarizer_kwargs = {
+                    "model": summarizer_model, 
+                    "temperature": 0
+                }
+                embeddings_kwargs = {}
+                
+                # Add API key if provided
+                if api_key:
+                    openai_kwargs["api_key"] = api_key
+                    summarizer_kwargs["api_key"] = api_key
+                    embeddings_kwargs["api_key"] = api_key
+                
+                # Add custom base URL if provided
+                if base_url:
+                    openai_kwargs["base_url"] = base_url
+                    summarizer_kwargs["base_url"] = base_url
+                    embeddings_kwargs["base_url"] = base_url
+                    await log_stream.put(f"--- Using custom OpenAI API endpoint: {base_url} ---")
+                
+                await log_stream.put(f"--- Initializing Main Agent LLM: OpenAI-compatible ({main_model}) ---")
+                llm = ChatOpenAI(**openai_kwargs)
+                summarizer_llm = ChatOpenAI(**summarizer_kwargs)
+                embeddings_model = OpenAIEmbeddings(**embeddings_kwargs)
                 
                 # Test connection
                 await llm.ainvoke("Hi")
-                await log_stream.put("--- OpenAI LLM Connection Successful ---")
+                await log_stream.put("--- OpenAI-compatible LLM Connection Successful ---")
             else:
                 # Ollama configuration (default)
                 summarizer_llm = ChatOllama(model="qwen3:1.7b", temperature=0)
