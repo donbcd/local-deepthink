@@ -2994,17 +2994,25 @@ async def build_and_run_graph(payload: dict = Body(...)):
                 if not api_key:
                     raise ValueError("OpenAI API key is required when using OpenAI provider")
                 
+                # Basic API key format validation
+                if not api_key.startswith("sk-") or len(api_key) < 20:
+                    raise ValueError("Invalid OpenAI API key format. API key should start with 'sk-' and be at least 20 characters long.")
+                
                 main_model = params.get("openai_model", "gpt-4o-mini")
                 summarizer_model = params.get("openai_summarizer_model", "gpt-4o-mini")
                 
                 await log_stream.put(f"--- Initializing Main Agent LLM: OpenAI ({main_model}) ---")
-                llm = ChatOpenAI(model=main_model, temperature=0, api_key=api_key)
-                summarizer_llm = ChatOpenAI(model=summarizer_model, temperature=0, api_key=api_key)
+                llm = ChatOpenAI(model=main_model, temperature=0, api_key=api_key, timeout=30)
+                summarizer_llm = ChatOpenAI(model=summarizer_model, temperature=0, api_key=api_key, timeout=30)
                 embeddings_model = OpenAIEmbeddings(api_key=api_key)
                 
-                # Test connection
-                await llm.ainvoke("Hi")
-                await log_stream.put("--- OpenAI LLM Connection Successful ---")
+                # Test connection with better error handling
+                try:
+                    await log_stream.put("--- Testing OpenAI API connection ---")
+                    test_response = await llm.ainvoke("Hi")
+                    await log_stream.put("--- OpenAI LLM Connection Successful ---")
+                except Exception as conn_error:
+                    raise ValueError(f"Failed to connect to OpenAI API: {str(conn_error)}. Please check your API key and internet connection.")
             else:
                 # Ollama configuration (default)
                 summarizer_llm = ChatOllama(model="qwen3:1.7b", temperature=0)
@@ -3016,7 +3024,12 @@ async def build_and_run_graph(payload: dict = Body(...)):
                 await log_stream.put("--- Main Agent LLM Connection Successful ---")
 
     except Exception as e:
-        error_message = f"Failed to initialize LLM: {e}. Please ensure the selected provider is configured correctly."
+        provider = params.get("llm_provider", "ollama")
+        if provider == "openai":
+            error_message = f"Failed to initialize OpenAI provider: {e}. Please verify your API key is correct and has sufficient credits."
+        else:
+            error_message = f"Failed to initialize Ollama provider: {e}. Please ensure Ollama is running and the model is available."
+        
         await log_stream.put(error_message)
         return JSONResponse(content={"message": error_message, "traceback": traceback.format_exc()}, status_code=500)
     
