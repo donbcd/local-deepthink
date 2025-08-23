@@ -4,6 +4,7 @@ python-dotenv
 sse-starlette
 langchain
 langchain-community
+langchain-openai
 langchain-google-genai
 langgraph
 scikit-learn

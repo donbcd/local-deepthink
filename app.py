@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request, Body
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from langchain_community.chat_models import ChatOllama
 from langchain_community.embeddings import OllamaEmbeddings
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema.output_parser import StrOutputParser
 from langgraph.graph import StateGraph, END
@@ -2967,21 +2968,52 @@ async def build_and_run_graph(payload: dict = Body(...)):
             await log_stream.put(f"--- 💻 CODER DEBUG MODE ENABLED 💻 ---")
             llm = CoderMockLLM()
             summarizer_llm = CoderMockLLM()
-            embeddings_model = OllamaEmbeddings(model="mxbai-embed-large:latest")
+            # For debug modes, default to Ollama embeddings unless OpenAI is specifically requested
+            provider = params.get("llm_provider", "ollama")
+            if provider == "openai" and params.get("openai_api_key"):
+                embeddings_model = OpenAIEmbeddings(api_key=params.get("openai_api_key"))
+            else:
+                embeddings_model = OllamaEmbeddings(model="mxbai-embed-large:latest")
         elif params.get("debug_mode") == 'true':
             await log_stream.put(f"--- 🚀 DEBUG MODE ENABLED 🚀 ---")
             llm = MockLLM()
             summarizer_llm = MockLLM()
-            embeddings_model = OllamaEmbeddings(model="mxbai-embed-large:latest")
+            # For debug modes, default to Ollama embeddings unless OpenAI is specifically requested
+            provider = params.get("llm_provider", "ollama")
+            if provider == "openai" and params.get("openai_api_key"):
+                embeddings_model = OpenAIEmbeddings(api_key=params.get("openai_api_key"))
+            else:
+                embeddings_model = OllamaEmbeddings(model="mxbai-embed-large:latest")
         else:
+            # Get the provider choice from parameters
+            provider = params.get("llm_provider", "ollama")
             
-            summarizer_llm = ChatOllama(model="qwen3:1.7b", temperature=0)
-            embeddings_model = OllamaEmbeddings(model="mxbai-embed-large:latest")
-            model_name = params.get("ollama_model", "dengcao/Qwen3-3B-A3B-Instruct-2507:latest")
-            await log_stream.put(f"--- Initializing Main Agent LLM: Ollama ({model_name}) ---")
-            llm = ChatOllama(model=model_name, temperature=0)
-            await llm.ainvoke("Hi")
-            await log_stream.put("--- Main Agent LLM Connection Successful ---")
+            if provider == "openai":
+                # OpenAI configuration
+                api_key = params.get("openai_api_key")
+                if not api_key:
+                    raise ValueError("OpenAI API key is required when using OpenAI provider")
+                
+                main_model = params.get("openai_model", "gpt-4o-mini")
+                summarizer_model = params.get("openai_summarizer_model", "gpt-4o-mini")
+                
+                await log_stream.put(f"--- Initializing Main Agent LLM: OpenAI ({main_model}) ---")
+                llm = ChatOpenAI(model=main_model, temperature=0, api_key=api_key)
+                summarizer_llm = ChatOpenAI(model=summarizer_model, temperature=0, api_key=api_key)
+                embeddings_model = OpenAIEmbeddings(api_key=api_key)
+                
+                # Test connection
+                await llm.ainvoke("Hi")
+                await log_stream.put("--- OpenAI LLM Connection Successful ---")
+            else:
+                # Ollama configuration (default)
+                summarizer_llm = ChatOllama(model="qwen3:1.7b", temperature=0)
+                embeddings_model = OllamaEmbeddings(model="mxbai-embed-large:latest")
+                model_name = params.get("ollama_model", "dengcao/Qwen3-3B-A3B-Instruct-2507:latest")
+                await log_stream.put(f"--- Initializing Main Agent LLM: Ollama ({model_name}) ---")
+                llm = ChatOllama(model=model_name, temperature=0)
+                await llm.ainvoke("Hi")
+                await log_stream.put("--- Main Agent LLM Connection Successful ---")
 
     except Exception as e:
         error_message = f"Failed to initialize LLM: {e}. Please ensure the selected provider is configured correctly."
