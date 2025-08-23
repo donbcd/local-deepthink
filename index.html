@@ -299,20 +299,21 @@
                 <!-- OpenAI Configuration -->
                 <div id="openai-model-section" class="hidden">
                     <label for="openai_api_key">OpenAI API Key:</label>
-                    <input type="password" id="openai_api_key" name="openai_api_key" placeholder="sk-...">
+                    <input type="password" id="openai_api_key" name="openai_api_key" placeholder="sk-..." pattern="sk-.{20,}" title="API key should start with 'sk-' and be at least 20 characters long">
+                    <small id="api-key-hint" style="color: #666; font-size: 0.8em;">Enter your OpenAI API key (starts with sk-)</small>
                     <label for="openai_model">OpenAI Main Model:</label>
                     <select id="openai_model" name="openai_model">
-                        <option value="gpt-4o-mini">GPT-4o Mini</option>
-                        <option value="gpt-4o">GPT-4o</option>
-                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        <option value="gpt-4o-mini">GPT-4o Mini (Fast, Cost-effective)</option>
+                        <option value="gpt-4o">GPT-4o (Balanced Performance)</option>
+                        <option value="gpt-4-turbo">GPT-4 Turbo (High Performance)</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Budget-friendly)</option>
                     </select>
                     <label for="openai_summarizer_model">OpenAI Summarizer Model:</label>
                     <select id="openai_summarizer_model" name="openai_summarizer_model">
-                        <option value="gpt-4o-mini">GPT-4o Mini</option>
-                        <option value="gpt-4o">GPT-4o</option>
-                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        <option value="gpt-4o-mini">GPT-4o Mini (Fast, Cost-effective)</option>
+                        <option value="gpt-4o">GPT-4o (Balanced Performance)</option>
+                        <option value="gpt-4-turbo">GPT-4 Turbo (High Performance)</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Budget-friendly)</option>
                     </select>
                 </div>
                 <label for="cot_trace_depth">CoT trace depth (max 32):</label>
@@ -775,6 +776,19 @@ the world is full of spinning wheels (harmonic oscillators), like we see them in
         if (!params.mbti_archetypes || params.mbti_archetypes.length < 2) {
             alert('Please select at least 2 MBTI archetypes.');
             return;
+        }
+
+        // Validate OpenAI API key if OpenAI provider is selected
+        if (params.llm_provider === 'openai' && params.debug_mode !== 'true' && params.coder_debug_mode !== 'true') {
+            const apiKey = params.openai_api_key;
+            if (!apiKey) {
+                alert('OpenAI API key is required when using OpenAI provider.');
+                return;
+            }
+            if (!apiKey.startsWith('sk-') || apiKey.length < 20) {
+                alert('Invalid OpenAI API key format. API key should start with "sk-" and be at least 20 characters long.');
+                return;
+            }
         }
 
         // --- UI LOGIC ---
